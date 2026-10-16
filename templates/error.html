@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} | HelpDesk{% endblock %}
+{% block content %}<section class="empty-page panel"><div class="empty-run-icon">{{ code }}</div><h1>Something got in the way.</h1><p>{{ message }}</p><a class="button button-primary" href="{{ url_for('index') }}">Go back home →</a></section>{% endblock %}

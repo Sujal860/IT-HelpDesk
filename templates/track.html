@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Track a ticket | HelpDesk{% endblock %}
+{% block content %}
+<section class="page-heading"><div class="eyebrow">TICKET TRACKING</div><h1>Know where your request stands.</h1><p>Search by your ticket number to see its latest stored status and scheduling estimate.</p></section>
+<section class="track-search panel"><form method="post" action="{{ url_for('track_lookup') }}" class="track-search-form"><label for="ticket-id">Ticket ID</label><input id="ticket-id" name="ticket_id" value="{{ query }}" placeholder="HD-0001" required><button class="button button-primary" type="submit">Find ticket →</button></form></section>
+{% if ticket %}
+<section class="track-layout">
+  <div class="panel ticket-detail-panel">
+    <div class="ticket-title-row"><div><div class="section-kicker">{{ ticket.ticket_code }} <span>· {{ ticket.category_name }}</span></div><h2>{{ ticket.title }}</h2></div><span class="status-pill status-{{ ticket.status|lower|replace('_','-') }}">{{ ticket.status|replace('_',' ') }}</span></div>
+    <p class="ticket-description">{{ ticket.description }}</p>
+    <div class="detail-grid"><div><small>Submitted by</small><strong>{{ ticket.requester_name }}</strong></div><div><small>Submitted</small><strong>{{ ticket.created_label }}</strong></div><div><small>Priority</small><strong>{{ {1:'Critical', 2:'High', 3:'Medium', 4:'Low'}.get(ticket.priority, 'Medium') }} ({{ ticket.priority }})</strong></div><div><small>Location / asset</small><strong>{{ ticket.location_or_asset or 'Not specified' }}</strong></div></div>
+    <div class="eta-panel"><div class="eta-symbol">◷</div><div><small>APPROXIMATE COMPLETION ESTIMATE</small><strong>{{ ticket.eta_label }}</strong><p>{% if result %}Calculated by {{ result.algorithm }} during scheduling run #{{ result.run_id }}. It can change as the queue changes.{% else %}Not calculated yet. The admin can run FCFS from the dashboard.{% endif %}</p></div></div>
+    {% if ticket.confirmed_label != 'Not confirmed' %}<div class="confirmed-row"><span>Technician-confirmed target</span><strong>{{ ticket.confirmed_label }}</strong></div>{% else %}<div class="note-banner">This is an estimate, not a confirmed appointment. A technician has not confirmed a target time.</div>{% endif %}
+    {% if result %}<div class="detail-grid result-metrics"><div><small>Simulated queue position</small><strong>#{{ result.queue_order }}</strong></div><div><small>Estimated wait</small><strong>{{ result.waiting_time }} min</strong></div><div><small>Service estimate</small><strong>{{ result.service_time }} min</strong></div><div><small>Turnaround</small><strong>{{ result.turnaround_time }} min</strong></div></div>{% endif %}
+  </div>
+  <aside class="panel history-panel"><div class="section-kicker">ACTIVITY <span>HISTORY</span></div><h3>Ticket timeline</h3>{% if history %}<div class="timeline">{% for event in history %}<div class="timeline-event"><span class="timeline-point"></span><div><strong>{{ event.new_status|replace('_',' ') }}</strong><small>{{ event.changed_label }} · {{ event.changed_by }}</small><p>{{ event.note or 'Status event recorded.' }}</p></div></div>{% endfor %}</div>{% else %}<p>No history entries yet.</p>{% endif %}</aside>
+</section>
+{% endif %}
+{% endblock %}

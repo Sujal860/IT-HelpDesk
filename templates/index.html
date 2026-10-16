@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}HelpDesk | Submit a ticket{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="hero-copy">
+    <div class="eyebrow"><span class="pulse-dot"></span> TICKET MANAGEMENT</div>
+    <h1>IT issues in.<br><span>Solutions in motion.</span></h1>
+    <p class="hero-lede">Raise a support request, track its progress, and see how operating-system scheduling can help organize the help-desk queue.</p>
+    <div class="hero-actions">
+      <a class="button button-primary" href="#submit-ticket">Submit an issue <span>→</span></a>
+      <a class="button button-outline" href="{{ url_for('admin_dashboard') }}">View live queue</a>
+    </div>
+    <div class="hero-footnote"><span>●</span> Estimates are calculated from the current demo queue.</div>
+  </div>
+  <div class="hero-visual" aria-label="Illustration of a help desk ticket queue">
+    <div class="visual-top"><span>QUEUE OVERVIEW</span><span class="live-tag"><i></i> LIVE DEMO</span></div>
+    <div class="visual-number-row"><div><strong>{{ counts.open_count or 0 }}</strong><small>Open tickets</small></div><div><strong>{{ counts.resolved_count or 0 }}</strong><small>Resolved / closed</small></div></div>
+    <div class="mini-queue">
+      <div class="mini-queue-heading"><span>RECENT REQUESTS</span><span>STATUS</span></div>
+      {% for item in recent[:4] %}
+      <div class="mini-ticket"><div class="mini-ticket-icon {% if item.priority == 1 %}urgent{% elif item.priority == 2 %}high{% else %}normal{% endif %}">{% if item.category_name == 'Network' %}⌁{% elif item.category_name == 'Hardware' %}▣{% elif item.category_name == 'Account / Login' %}◉{% else %}↗{% endif %}</div><div class="mini-ticket-title"><strong>{{ item.title }}</strong><small>{{ item.ticket_code }} · {{ item.category_name }}</small></div><span class="status-pill status-{{ item.status|lower|replace('_','-') }}">{{ item.status|replace('_',' ') }}</span></div>
+      {% endfor %}
+      <a class="mini-queue-link" href="{{ url_for('admin_dashboard') }}">Open full queue <span>→</span></a>
+    </div>
+    <div class="decor decor-one"></div><div class="decor decor-two"></div>
+  </div>
+</section>
+
+<section class="stats-strip">
+  <div class="stat"><span class="stat-icon">▤</span><div><strong>{{ counts.total or 0 }}</strong><small>Total tickets in database</small></div></div>
+  <div class="stat"><span class="stat-icon stat-green">✓</span><div><strong>{{ counts.resolved_count or 0 }}</strong><small>Resolved or closed</small></div></div>
+  <div class="stat"><span class="stat-icon stat-blue">⌁</span><div><strong>FCFS</strong><small>First scheduling algorithm</small></div></div>
+  <div class="stat"><span class="stat-icon stat-purple">▥</span><div><strong>C++17</strong><small>Scheduler engine</small></div></div>
+</section>
+
+<section class="content-grid" id="submit-ticket">
+  <div class="form-card panel">
+    <div class="section-kicker">NEW REQUEST <span>01 / SUBMIT</span></div>
+    <h2>Tell us what needs fixing.</h2>
+    <p class="section-intro">Share a few details and we’ll create a trackable ticket.</p>
+    <form method="post" action="{{ url_for('submit_ticket') }}" class="ticket-form">
+      <div class="form-row">
+        <label>Full name <span>*</span><input name="name" maxlength="100" placeholder="e.g. Sujal Bisht" required></label>
+        <label>College email <span>*</span><input name="email" type="email" maxlength="190" placeholder="you@example.edu" required></label>
+      </div>
+      <label>Issue title <span>*</span><input name="title" maxlength="160" placeholder="Short summary of the issue" required></label>
+      <div class="form-row">
+        <label>Issue category <span>*</span><select name="category_id" required><option value="">Select a category</option>{% for category in categories %}<option value="{{ category.category_id }}">{{ category.category_name }} · ~{{ category.default_service_minutes }} min</option>{% endfor %}</select></label>
+        <label>Location / asset <small>(optional)</small><input name="location_or_asset" maxlength="180" placeholder="Lab, room, or device ID"></label>
+      </div>
+      <label>Describe the problem <span>*</span><textarea name="description" rows="4" maxlength="3000" placeholder="What happened? When did it start? Who is affected?" required></textarea></label>
+      <div class="form-bottom"><small><span class="required-dot">*</span> Required fields. Priority is initially suggested by the selected category.</small><button class="button button-primary" type="submit">Create ticket <span>→</span></button></div>
+    </form>
+  </div>
+  <aside class="side-stack">
+    <div class="track-card panel">
+      <div class="section-kicker">TICKET TRACKING <span>02 / TRACK</span></div>
+      <h3>Already submitted?</h3><p>Use your ticket ID to view current status, estimate, and history.</p>
+      <form method="post" action="{{ url_for('track_lookup') }}" class="track-inline"><input name="ticket_id" placeholder="HD-0001" aria-label="Ticket ID" required><button class="button button-dark" type="submit">Track →</button></form>
+      <div class="track-hint">Your ID appears on the confirmation screen.</div>
+    </div>
+    <div class="explainer-card">
+      <div class="explainer-icon">⌁</div><h3>How the queue works</h3>
+      <div class="step-row"><span>1</span><div><strong>Ticket is stored</strong><small>Flask validates it and saves it to the database.</small></div></div>
+      <div class="step-row"><span>2</span><div><strong>FCFS runs in C++17</strong><small>Eligible tickets are ordered by arrival time.</small></div></div>
+      <div class="step-row"><span>3</span><div><strong>Estimate is updated</strong><small>A preliminary estimate is calculated; the dashboard can rerun the simulation.</small></div></div>
+      <a href="{{ url_for('admin_dashboard') }}#scheduler" class="text-link">See scheduler and metrics →</a>
+    </div>
+  </aside>
+</section>
+{% endblock %}
