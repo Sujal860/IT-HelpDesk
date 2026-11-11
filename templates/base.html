@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}HelpDesk | OS + DBMS{% endblock %}</title>
+  <title>{% block title %}HelpDesk | IT Service Management{% endblock %}</title>
+  <meta name="csrf-token" content="{{ session.get('_csrf_token', '') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -15,7 +16,8 @@
     <nav>
       <a href="{{ url_for('index') }}">Home</a>
       <a href="{{ url_for('track_lookup') }}">Track ticket</a>
-      <a class="nav-cta" href="{{ url_for('admin_dashboard') }}">Admin dashboard <span>↗</span></a>
+      <a href="{{ url_for('service_performance') }}">Service ratings</a>
+      {% if session.get('admin_authenticated') %}<a class="nav-cta" href="{{ url_for('admin_dashboard') }}">Admin workspace <span>↗</span></a>{% elif session.get('technician_id') %}<a class="nav-cta" href="{{ url_for('technician_dashboard') }}">Technician workspace <span>↗</span></a>{% else %}<details class="staff-menu"><summary class="nav-cta">Staff portal <span>⌄</span></summary><div class="staff-menu-popover"><a href="{{ url_for('admin_login') }}">Administrator login</a><a href="{{ url_for('technician_login') }}">Technician login</a></div></details>{% endif %}
     </nav>
   </header>
 
@@ -29,7 +31,7 @@
   </main>
 
   <footer class="footer">
-    <div><strong>HelpDesk</strong> · OS + DBMS college project · Phase 2 prototype</div>
+    <div><strong>HelpDesk</strong> · Multi-organization IT service platform</div>
     <div class="footer-note">Simulation results do not automatically resolve real tickets.</div>
   </footer>
   <script src="{{ url_for('static', filename='app.js') }}"></script>

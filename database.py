@@ -98,9 +98,7 @@ def _sql(statement: str) -> str:
 def execute(statement: str, params: Iterable[Any] = ()):
     conn = get_db()
     if DB_MODE == "mysql":
-        cursor = conn.cursor()
-        cursor.execute(_sql(statement), tuple(params))
-        return cursor
+        return conn.execute(statement, tuple(params))
     return conn.execute(statement, tuple(params))
 
 
@@ -293,6 +291,8 @@ def init_db():
             conn.execute(statement)
         conn.commit()
 
+    from phase3_schema import init_phase3_schema
+    init_phase3_schema(conn, DB_MODE)
     seed_categories()
 
 
@@ -306,6 +306,8 @@ def seed_categories():
         ("Hardware", "Desktop, laptop, monitor, or component issue", 2, 40),
         ("Classroom AV", "Projector, display, or classroom audio/visual issue", 2, 25),
         ("General Request", "Routine IT help or information request", 4, 20),
+        ("System Maintenance", "Preventive maintenance, updates, and system health checks", 3, 35),
+        ("Cybersecurity Support", "Endpoint security, suspicious activity, and access protection", 1, 45),
     ]
     conn = get_db()
     for row in categories:
@@ -334,7 +336,7 @@ DEMO_TICKETS = [
     ("Projector has no HDMI signal", "The lecture hall projector shows no signal from the instructor PC.", "Lecture Hall 2", "Classroom AV", 2, "READY", 25, 6),
     ("Request access to shared drive", "A project team needs read/write access to its approved shared folder.", "Research Lab", "General Request", 4, "READY", 20, 7),
     ("VPN connection fails off campus", "Remote VPN authentication fails despite the correct credentials.", "Remote access", "Network", 2, "READY", 30, 8),
-    ("Database lab machine cannot reach MySQL", "Workbench connects locally but the lab service is unreachable from student machines.", "DBMS Lab", "Server / Application", 2, "READY", 35, 9),
+    ("Lab workstation cannot reach the internal application server", "The workstation can reach local services but cannot connect to the shared application server.", "IT Lab", "Server / Application", 2, "READY", 35, 9),
     ("Reset password for library kiosk", "A library kiosk account needs its password reset after a lockout.", "Central Library", "Account / Login", 3, "READY", 15, 10),
     ("Scanner produces blank pages", "The office scanner feeder works but output pages are blank.", "Admin Office", "Printer / Peripheral", 3, "READY", 20, 11),
     ("Install visualization package for Python lab", "Install and verify an approved plotting package on lab machines.", "Data Science Lab", "Software Installation", 3, "READY", 30, 12),
@@ -361,6 +363,8 @@ def insert_demo_data(force: bool = False):
 
     category_rows = fetch_all("SELECT category_id, category_name FROM categories")
     category_map = {row["category_name"]: row["category_id"] for row in category_rows}
+    default_org = fetch_one("SELECT organization_id FROM organizations WHERE is_active=1 ORDER BY organization_id LIMIT 1")
+    org_id = int(default_org["organization_id"]) if default_org else None
     for i, item in enumerate(DEMO_TICKETS):
         title, description, location, category_name, priority, status, service, arrival = item
         email = f"demo.requester{i+1:02d}@example.edu"
@@ -370,18 +374,23 @@ def insert_demo_data(force: bool = False):
             user_id = user["user_id"]
         else:
             cursor = conn.execute(
-                "INSERT INTO users (name, email, role, created_at) VALUES (?, ?, 'USER', ?)",
-                (name, email, _now_str(offset_days=i % 5, offset_hours=i % 4))
+                "INSERT INTO users (name, email, role, created_at, organization_id) VALUES (?, ?, 'USER', ?, ?)",
+                (name, email, _now_str(offset_days=i % 5, offset_hours=i % 4), org_id)
             )
             user_id = cursor.lastrowid
+        if org_id is not None:
+            if DB_MODE == "mysql":
+                conn.execute("INSERT IGNORE INTO organization_users (organization_id,user_id,joined_at) VALUES (?,?,?)", (org_id,user_id,_now_str()))
+            else:
+                conn.execute("INSERT OR IGNORE INTO organization_users (organization_id,user_id,joined_at) VALUES (?,?,?)", (org_id,user_id,_now_str()))
         created = _now_str(offset_days=i % 5, offset_hours=i % 7)
         cursor = conn.execute(
             """INSERT INTO tickets
-               (user_id, category_id, title, description, location_or_asset, priority, status,
+               (user_id, category_id, organization_id, title, description, location_or_asset, priority, status,
                 estimated_service_minutes, arrival_offset, created_at, updated_at,
                 resolved_at, resolution_notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (user_id, category_map[category_name], title, description, location, priority, status,
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, category_map[category_name], org_id, title, description, location, priority, status,
              service, arrival, created, created,
              _now_str(offset_days=max(0, i % 3)) if status in ("RESOLVED", "CLOSED") else None,
              "Demo ticket marked complete for dashboard examples." if status in ("RESOLVED", "CLOSED") else None)
@@ -397,6 +406,11 @@ def insert_demo_data(force: bool = False):
 
 def reset_demo_data():
     conn = get_db()
+    conn.execute("DELETE FROM resource_allocations")
+    conn.execute("DELETE FROM technician_ratings")
+    conn.execute("DELETE FROM service_ratings")
+    conn.execute("DELETE FROM ticket_assignments")
+    conn.execute("DELETE FROM scheduling_segments")
     conn.execute("DELETE FROM scheduling_results")
     conn.execute("DELETE FROM scheduling_runs")
     conn.execute("DELETE FROM ticket_history")

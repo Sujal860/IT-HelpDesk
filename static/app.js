@@ -25,7 +25,7 @@
     };
     const axis = document.createElement('div');
     axis.className = 'gantt-axis';
-    axis.innerHTML = '<div class="gantt-label"><strong>TIME</strong><small>date · hh:mm</small></div><div class="gantt-axis-track" style="min-width:' + chartWidth + 'px">' +
+    axis.innerHTML = '<div class="gantt-label"><strong>TIME</strong><small>date · HH:MM</small></div><div class="gantt-axis-track" style="min-width:' + chartWidth + 'px">' +
       Array.from({ length: ticks + 1 }, (_, i) => {
         const t = Math.round((maxTime * i) / ticks);
         return '<span style="left:' + (i / ticks * 100) + '%">' + fmt(t) + '</span>';
@@ -70,23 +70,26 @@
       day.setHours(19, 0, 0, 0);
     }
     rows.forEach((r, i) => {
-      const start = Number(r.start_time || 0);
-      const completion = Number(r.completion_time || 0);
-      const service = Math.max(0, Number(r.service_time || completion - start));
-      const left = start / maxTime * 100;
-      const width = service / maxTime * 100;
       const code = 'HD-' + String(r.ticket_id).padStart(4, '0');
       const title = String(r.title || ('Ticket ' + r.ticket_id));
-      const bar = document.createElement('div');
-      bar.className = 'gantt-bar';
-      bar.style.left = left + '%';
-      bar.style.width = width + '%';
-      bar.style.background = palette[i % palette.length];
-      bar.title = code + ' · ' + title + ' · ' + fmt(start) + '–' + fmt(completion) + ' · service ' + String(Math.floor(service / 60)).padStart(2, '0') + ':' + String(service % 60).padStart(2, '0');
-      const label = document.createElement('span');
-      label.textContent = width >= 7 ? code : String(r.queue_order || i + 1);
-      bar.appendChild(label);
-      track.appendChild(bar);
+      const segments = Array.isArray(r.segments) && r.segments.length ? r.segments : [{ start_time: r.start_time, end_time: r.completion_time }];
+      segments.forEach((segment, segmentIndex) => {
+        const start = Number(segment.start_time || 0);
+        const completion = Number(segment.end_time || start);
+        const duration = Math.max(0, completion - start);
+        const left = start / maxTime * 100;
+        const width = duration / maxTime * 100;
+        const bar = document.createElement('div');
+        bar.className = 'gantt-bar';
+        bar.style.left = left + '%';
+        bar.style.width = width + '%';
+        bar.style.background = palette[i % palette.length];
+        bar.title = code + ' · ' + title + ' · segment ' + (segmentIndex + 1) + ' · ' + fmt(start) + '–' + fmt(completion);
+        const label = document.createElement('span');
+        label.textContent = width >= 7 ? code : (segmentIndex === 0 ? String(r.queue_order || i + 1) : '');
+        bar.appendChild(label);
+        track.appendChild(bar);
+      });
     });
     root.appendChild(row);
     const note = document.createElement('div');
@@ -97,6 +100,16 @@
 
   window.renderGanttChart = renderGanttChart;
   document.addEventListener('DOMContentLoaded', function () {
+    const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+    if (tokenMeta) {
+      document.querySelectorAll('form[method="post"], form[method="POST"]').forEach((form) => {
+        if (!form.querySelector('input[name="_csrf_token"]')) {
+          const token = document.createElement('input');
+          token.type = 'hidden'; token.name = '_csrf_token'; token.value = tokenMeta.content;
+          form.appendChild(token);
+        }
+      });
+    }
     const textarea = document.querySelector('textarea[name="description"]');
     if (textarea) textarea.addEventListener('input', function () {
       textarea.style.height = 'auto';

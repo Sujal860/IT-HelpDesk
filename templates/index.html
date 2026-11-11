@@ -5,32 +5,32 @@
   <div class="hero-copy">
     <div class="eyebrow"><span class="pulse-dot"></span> TICKET MANAGEMENT</div>
     <h1>IT issues in.<br><span>Solutions in motion.</span></h1>
-    <p class="hero-lede">Raise a support request, track its progress, and see how operating-system scheduling can help organize the help-desk queue.</p>
+    <p class="hero-lede">Raise a support request, track progress, and get a clearer view of how your support request moves through the service queue.</p>
     <div class="hero-actions">
       <a class="button button-primary" href="#submit-ticket">Submit an issue <span>→</span></a>
-      <a class="button button-outline" href="{{ url_for('admin_dashboard') }}">View live queue</a>
+      <a class="button button-outline" href="{{ url_for('service_performance') }}">View service ratings</a>
     </div>
-    <div class="hero-footnote"><span>●</span> Estimates are calculated from the current demo queue.</div>
+    <div class="hero-footnote"><span>●</span> Completion times are estimates from the selected scheduling policy.</div>
   </div>
-  <div class="hero-visual" aria-label="Illustration of a help desk ticket queue">
-    <div class="visual-top"><span>QUEUE OVERVIEW</span><span class="live-tag"><i></i> LIVE DEMO</span></div>
-    <div class="visual-number-row"><div><strong>{{ counts.open_count or 0 }}</strong><small>Open tickets</small></div><div><strong>{{ counts.resolved_count or 0 }}</strong><small>Resolved / closed</small></div></div>
+  <div class="hero-visual" aria-label="Illustration of the help desk request workflow">
+    <div class="visual-top"><span>REQUEST WORKFLOW</span><span class="live-tag"><i></i> ORGANIZATION SUPPORT</span></div>
+    <div class="visual-number-row"><div><strong>03</strong><small>Scheduling policies</small></div><div><strong>05★</strong><small>Service feedback scale</small></div></div>
     <div class="mini-queue">
-      <div class="mini-queue-heading"><span>RECENT REQUESTS</span><span>STATUS</span></div>
-      {% for item in recent[:4] %}
-      <div class="mini-ticket"><div class="mini-ticket-icon {% if item.priority == 1 %}urgent{% elif item.priority == 2 %}high{% else %}normal{% endif %}">{% if item.category_name == 'Network' %}⌁{% elif item.category_name == 'Hardware' %}▣{% elif item.category_name == 'Account / Login' %}◉{% else %}↗{% endif %}</div><div class="mini-ticket-title"><strong>{{ item.title }}</strong><small>{{ item.ticket_code }} · {{ item.category_name }}</small></div><span class="status-pill status-{{ item.status|lower|replace('_','-') }}">{{ item.status|replace('_',' ') }}</span></div>
-      {% endfor %}
-      <a class="mini-queue-link" href="{{ url_for('admin_dashboard') }}">Open full queue <span>→</span></a>
+      <div class="mini-queue-heading"><span>FROM REQUEST TO REVIEW</span><span>PROCESS</span></div>
+      <div class="mini-ticket"><div class="mini-ticket-icon normal">01</div><div class="mini-ticket-title"><strong>Submit a support request</strong><small>Select an organization and service category</small></div><span class="status-pill status-ready">NEW</span></div>
+      <div class="mini-ticket"><div class="mini-ticket-icon high">02</div><div class="mini-ticket-title"><strong>Queue and assignment</strong><small>Scheduling policies organize the work queue</small></div><span class="status-pill status-assigned">ASSIGNED</span></div>
+      <div class="mini-ticket"><div class="mini-ticket-icon urgent">03</div><div class="mini-ticket-title"><strong>Resolve and record</strong><small>Technicians update the ticket timeline</small></div><span class="status-pill status-resolved">DONE</span></div>
+      <div class="mini-ticket"><div class="mini-ticket-icon normal">04</div><div class="mini-ticket-title"><strong>Collect service feedback</strong><small>Ratings inform category-level performance</small></div><span class="status-pill status-closed">RATE</span></div>
     </div>
     <div class="decor decor-one"></div><div class="decor decor-two"></div>
   </div>
 </section>
 
 <section class="stats-strip">
-  <div class="stat"><span class="stat-icon">▤</span><div><strong>{{ counts.total or 0 }}</strong><small>Total tickets in database</small></div></div>
-  <div class="stat"><span class="stat-icon stat-green">✓</span><div><strong>{{ counts.resolved_count or 0 }}</strong><small>Resolved or closed</small></div></div>
-  <div class="stat"><span class="stat-icon stat-blue">⌁</span><div><strong>FCFS</strong><small>First scheduling algorithm</small></div></div>
-  <div class="stat"><span class="stat-icon stat-purple">▥</span><div><strong>C++17</strong><small>Scheduler engine</small></div></div>
+  <div class="stat"><span class="stat-icon">▤</span><div><strong>03</strong><small>Scheduling policies</small></div></div>
+  <div class="stat"><span class="stat-icon stat-green">✓</span><div><strong>Multi-org</strong><small>Organization-linked tickets</small></div></div>
+  <div class="stat"><span class="stat-icon stat-blue">⌁</span><div><strong>1–5</strong><small>Customer service rating scale</small></div></div>
+  <div class="stat"><span class="stat-icon stat-purple">▥</span><div><strong>08–19</strong><small>Example support workday</small></div></div>
 </section>
 
 <section class="content-grid" id="submit-ticket">
@@ -41,11 +41,12 @@
     <form method="post" action="{{ url_for('submit_ticket') }}" class="ticket-form">
       <div class="form-row">
         <label>Full name <span>*</span><input name="name" maxlength="100" placeholder="e.g. Sujal Bisht" required></label>
-        <label>College email <span>*</span><input name="email" type="email" maxlength="190" placeholder="you@example.edu" required></label>
+        <label>Work / contact email <span>*</span><input name="email" type="email" maxlength="190" placeholder="you@company.com" required></label>
       </div>
       <label>Issue title <span>*</span><input name="title" maxlength="160" placeholder="Short summary of the issue" required></label>
       <div class="form-row">
-        <label>Issue category <span>*</span><select name="category_id" required><option value="">Select a category</option>{% for category in categories %}<option value="{{ category.category_id }}">{{ category.category_name }} · ~{{ category.default_service_minutes }} min</option>{% endfor %}</select></label>
+        <label>Organization <span>*</span><select name="organization_id" required><option value="">Select organization</option>{% for org in organizations %}<option value="{{ org.organization_id }}">{{ org.organization_name }}</option>{% endfor %}</select></label>
+        <label>Issue category <span>*</span><select name="category_id" required><option value="">Select a category</option>{% for category in categories %}<option value="{{ category.category_id }}">{{ category.category_name }} · est. {{ category.default_service_minutes|duration }}</option>{% endfor %}</select></label>
         <label>Location / asset <small>(optional)</small><input name="location_or_asset" maxlength="180" placeholder="Lab, room, or device ID"></label>
       </div>
       <label>Describe the problem <span>*</span><textarea name="description" rows="4" maxlength="3000" placeholder="What happened? When did it start? Who is affected?" required></textarea></label>
@@ -56,15 +57,15 @@
     <div class="track-card panel">
       <div class="section-kicker">TICKET TRACKING <span>02 / TRACK</span></div>
       <h3>Already submitted?</h3><p>Use your ticket ID to view current status, estimate, and history.</p>
-      <form method="post" action="{{ url_for('track_lookup') }}" class="track-inline"><input name="ticket_id" placeholder="HD-0001" aria-label="Ticket ID" required><button class="button button-dark" type="submit">Track →</button></form>
+      <form method="post" action="{{ url_for('track_lookup') }}" class="track-inline"><input name="ticket_id" placeholder="HD-0001" aria-label="Ticket ID" required><input name="email" type="email" placeholder="Requester email" aria-label="Requester email" required><button class="button button-dark" type="submit">Track →</button></form>
       <div class="track-hint">Your ID appears on the confirmation screen.</div>
     </div>
     <div class="explainer-card">
       <div class="explainer-icon">⌁</div><h3>How the queue works</h3>
-      <div class="step-row"><span>1</span><div><strong>Ticket is stored</strong><small>Flask validates it and saves it to the database.</small></div></div>
-      <div class="step-row"><span>2</span><div><strong>FCFS runs in C++17</strong><small>Eligible tickets are ordered by arrival time.</small></div></div>
+      <div class="step-row"><span>1</span><div><strong>Ticket is stored</strong><small>Your request is validated and securely recorded.</small></div></div>
+      <div class="step-row"><span>2</span><div><strong>Choose a scheduling policy</strong><small>FCFS, Priority + Aging, or preemptive Round Robin.</small></div></div>
       <div class="step-row"><span>3</span><div><strong>Estimate is updated</strong><small>A preliminary estimate is calculated; the dashboard can rerun the simulation.</small></div></div>
-      <a href="{{ url_for('admin_dashboard') }}#scheduler" class="text-link">See scheduler and metrics →</a>
+      <a href="{{ url_for('admin_login') }}" class="text-link">Staff workspace sign in →</a>
     </div>
   </aside>
 </section>

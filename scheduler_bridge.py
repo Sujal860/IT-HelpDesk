@@ -152,3 +152,119 @@ def _python_fcfs(jobs: list[dict[str, Any]]) -> list[dict[str, int]]:
         })
         clock = completion
     return out
+
+
+def _compile_rr_cpp() -> tuple[Path | None, str | None]:
+    source = ROOT / "round_robin_scheduler.cpp"
+    compiler = os.environ.get("CXX") or shutil.which("g++") or shutil.which("clang++")
+    if not compiler:
+        return None, "C++17 compiler not found."
+    BUILD_DIR.mkdir(exist_ok=True)
+    binary = BUILD_DIR / ("round_robin_scheduler.exe" if os.name == "nt" else "round_robin_scheduler")
+    if not binary.exists() or binary.stat().st_mtime < source.stat().st_mtime:
+        try:
+            proc = subprocess.run([compiler, "-std=c++17", "-O2", "-Wall", "-Wextra", str(source), "-o", str(binary)],
+                                  capture_output=True, text=True, timeout=45, cwd=str(ROOT))
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            return None, f"Could not invoke C++ compiler: {exc}"
+        if proc.returncode != 0:
+            return None, f"C++ compilation failed: {(proc.stderr or proc.stdout)[-1000:]}"
+    return binary, None
+
+
+def run_round_robin(jobs: list[dict[str, Any]], quantum: int, context_switch_overhead: int = 0) -> tuple[list[dict[str, Any]], str, int]:
+    if not 1 <= int(quantum) <= 240:
+        raise ValueError("Time quantum must be between 1 and 240 minutes.")
+    if not 0 <= int(context_switch_overhead) <= 30:
+        raise ValueError("Context-switch overhead must be between 0 and 30 minutes.")
+    if any(int(j["estimated_service_minutes"]) <= 0 for j in jobs):
+        raise ValueError("Every READY ticket must have a positive service duration.")
+    if any(int(j["arrival_offset"]) < 0 for j in jobs):
+        raise ValueError("Arrival times cannot be negative.")
+    binary, error = _compile_rr_cpp()
+    if binary:
+        payload = [str(len(jobs))]
+        payload.extend(f"{int(j['ticket_id'])} {int(j['arrival_offset'])} {int(j['estimated_service_minutes'])}" for j in jobs)
+        try:
+            proc = subprocess.run([str(binary), str(int(quantum)), str(int(context_switch_overhead))], input="\n".join(payload)+"\n",
+                                  capture_output=True, text=True, timeout=15, cwd=str(ROOT))
+            if proc.returncode == 0:
+                rows: dict[int, dict[str, Any]] = {}
+                segments: dict[int, list[dict[str, int]]] = {}
+                switches = 0
+                for line in proc.stdout.splitlines():
+                    parts = line.split()
+                    if not parts: continue
+                    if parts[0] == "C": switches = int(parts[1])
+                    elif parts[0] == "S":
+                        tid, start, end = map(int, parts[1:4])
+                        segments.setdefault(tid, []).append({"start_time": start, "end_time": end})
+                    elif parts[0] == "R":
+                        vals = list(map(int, parts[1:]))
+                        tid, arrival, service, start, completion, waiting, turnaround, response, order = vals
+                        rows[tid] = {"ticket_id": tid, "arrival_time": arrival, "service_time": service,
+                                     "start_time": start, "completion_time": completion, "waiting_time": waiting,
+                                     "turnaround_time": turnaround, "response_time": response, "queue_order": order}
+                if len(rows) == len(jobs):
+                    for tid, row in rows.items(): row["segments"] = segments.get(tid, [])
+                    return sorted(rows.values(), key=lambda x: x["queue_order"]), "C++17 Round Robin executable", switches
+                error = "Round Robin C++ output was incomplete."
+            else:
+                error = f"Round Robin C++ scheduler failed: {proc.stderr[-1000:]}"
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            error = f"Round Robin C++ execution failed: {exc}"
+    results, switches = _python_round_robin(jobs, int(quantum), int(context_switch_overhead))
+    return results, f"Python Round Robin fallback — {error or 'C++ scheduler unavailable'}", switches
+
+
+def _python_round_robin(jobs: list[dict[str, Any]], quantum: int, overhead: int = 0):
+    ordered = sorted((dict(j) for j in jobs), key=lambda x: (int(x["arrival_offset"]), int(x["ticket_id"])))
+    remaining = {int(j["ticket_id"]): int(j["estimated_service_minutes"]) for j in ordered}
+    by_id = {int(j["ticket_id"]): j for j in ordered}
+    segments: dict[int, list[dict[str, int]]] = {int(j["ticket_id"]): [] for j in ordered}
+    first: dict[int, int] = {}
+    completion: dict[int, int] = {}
+    ready: list[int] = []
+    cursor = 0
+    clock = 0
+    previous = None
+    switches = 0
+    while len(completion) < len(ordered):
+        while cursor < len(ordered) and int(ordered[cursor]["arrival_offset"]) <= clock:
+            ready.append(int(ordered[cursor]["ticket_id"]))
+            cursor += 1
+        if not ready:
+            if cursor < len(ordered):
+                clock = max(clock, int(ordered[cursor]["arrival_offset"]))
+                continue
+            break
+        tid = ready.pop(0)
+        if previous is not None and previous != tid:
+            switches += 1
+            clock += overhead
+        first.setdefault(tid, clock)
+        duration = min(quantum, remaining[tid])
+        start = clock
+        clock += duration
+        segments[tid].append({"start_time": start, "end_time": clock})
+        remaining[tid] -= duration
+        while cursor < len(ordered) and int(ordered[cursor]["arrival_offset"]) <= clock:
+            ready.append(int(ordered[cursor]["ticket_id"]))
+            cursor += 1
+        if remaining[tid] > 0:
+            ready.append(tid)
+        else:
+            completion[tid] = clock
+        previous = tid
+    results = []
+    for order, tid in enumerate(sorted(first, key=lambda x: (first[x], x)), 1):
+        job = by_id[tid]
+        arrival = int(job["arrival_offset"])
+        service = int(job["estimated_service_minutes"])
+        done = completion[tid]
+        results.append({"ticket_id": tid, "arrival_time": arrival, "service_time": service,
+                        "start_time": first[tid], "completion_time": done,
+                        "waiting_time": done-arrival-service, "turnaround_time": done-arrival,
+                        "response_time": first[tid]-arrival, "queue_order": order,
+                        "segments": segments[tid]})
+    return results, switches

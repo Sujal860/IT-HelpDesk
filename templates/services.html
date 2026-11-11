@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Service performance | HelpDesk{% endblock %}
+{% block content %}
+<section class="page-heading"><div class="eyebrow">SERVICE QUALITY</div><h1>Measured by customer feedback.</h1><p>Aggregated service-category ratings linked to resolved tickets. Individual technician ratings and private feedback are not displayed here.</p></section>
+<section class="performance-summary panel"><div><small>OVERALL SERVICE RATING</small><strong>{% if overall.average_rating is not none %}{{ '%.2f'|format(overall.average_rating) }}{% else %}—{% endif %}<span>/ 5</span></strong><p>{{ overall.review_count }} ticket-linked service reviews</p></div><div class="rating-note">Ratings are accepted only for resolved tickets and are linked to a ticket and its service category.</div></section>
+<section class="service-rating-grid">{% for item in ratings %}<article class="service-rating-card panel"><div class="service-rating-icon">✦</div><h2>{{ item.category_name }}</h2><div class="service-rating-score">{% if item.average_rating is not none %}{{ '%.2f'|format(item.average_rating) }}{% else %}Not rated yet{% endif %}<span>{% if item.average_rating is not none %}/ 5{% endif %}</span></div><div class="rating-bar"><span style="width:{{ ((item.average_rating or 0) / 5 * 100)|round(0) }}%"></span></div><small>{{ item.review_count }} customer reviews</small></article>{% endfor %}</section>
+{% endblock %}

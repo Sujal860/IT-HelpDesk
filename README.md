@@ -1,61 +1,101 @@
-# HelpDesk — OS + DBMS (Phase 2 / 40% Prototype)
+# IT Help Desk — Phase 3
 
-A working college-project prototype for submitting and tracking help-desk tickets, storing them in a relational database, and demonstrating OS scheduling concepts through a separate C++17 FCFS program.
+A Flask-based, multi-organization IT service platform with a scheduling engine and structured relational data workflows. It supports ticket intake and tracking, technician assignment and status updates, customer service feedback, resource allocation, and comparisons of FCFS, Priority + Aging, and Round Robin.
 
-## What works in this phase
+> **Deployment note:** This is an academic/local prototype, not a production-ready SaaS deployment. The current public ticket form lets a requester select an active organization, and ticket tracking/rating is matched using ticket ID plus requester email (there is no email OTP or customer account login yet). Before serving real client organizations over the internet, add organization-approved customer identity/invitations, HTTPS, managed secrets, rate limiting, audit logging, backups, and a security review.
 
-- Ticket submission form with server-side validation.
-- Ticket IDs such as `HD-0001` and a ticket tracking page.
-- Persistent records for users, categories, tickets, and ticket status history.
-- Seeded campus IT scenario (22 realistic tickets with different categories, priorities, service-duration estimates, and statuses).
-- Admin dashboard showing ticket totals, READY queue, open/resolved counts, and ticket records.
-- FCFS (First Come, First Served) scheduling implemented in C++17, invoked by Flask as a separate executable.
-- FCFS results saved to `scheduling_runs` and `scheduling_results`.
-- Gantt chart plus average waiting, response, turnaround, throughput, and utilization metrics.
-- Preliminary approximate completion estimate is calculated when a ticket is submitted; admin can rerun FCFS to refresh the queue estimates. A simulation never resolves a ticket.
-- Python FCFS fallback only when no C++ compiler is installed. The dashboard labels the engine clearly; for a C++ demonstration, install a compiler and ensure the engine label says `C++17 executable`.
+## Features
+
+### Ticket workflow
+- Submit requests with an organization, contact email, category, description, and optional location/asset.
+- Generate ticket IDs such as `HD-0023`.
+- Track a ticket using its ID and requester email.
+- Maintain ticket status history and estimated completion information.
+- Technicians can update assigned tickets through a password-protected technician workspace.
+- Administrators can assign or reassign tickets and manage technician availability.
+
+### Scheduling engine
+
+All user-facing durations use a 24-hour `HH:MM` duration format (for example, `00:04` for four minutes). The scheduler continues to store and calculate durations internally as integer minutes.
+- **FCFS:** non-preemptive First Come, First Served scheduling.
+- **Priority + Aging:** non-preemptive priority scheduling; priority 1 is highest and waiting reduces the numeric priority by one level every 00:05 of simulated waiting time, capped at 1.
+- **Round Robin:** preemptive time slicing with a configurable quantum (00:01–04:00), optional context-switch overhead (00:00–00:30), multiple execution segments per ticket, context-switch count, and a Gantt chart.
+- Scheduling run summaries and per-ticket metrics are persisted. RR execution intervals are stored in `scheduling_segments`.
+- A live comparison runs all three algorithms on the same snapshot of READY tickets.
+- The schedulers are **simulations**. A simulated completion does not resolve a real ticket or require a technician to change work every quantum.
+- The application maps scheduled service intervals to a demonstration workday of 08:00–19:00; overnight gaps are shown in the Gantt chart.
+
+### Technician ratings and service ratings
+- After resolution, a requester can submit one service-category rating per ticket and optionally rate the assigned technician.
+- Technician ratings and written feedback are visible only in the administrator workspace.
+- Service-category ratings are aggregated on the public `/services` page with review counts; individual technician ratings and private feedback are not exposed there.
+- Ratings are linked to completed tickets. The current requester check is an email match, not a one-time-password verification.
+
+### Organizations, resources, and analytics
+- Create and deactivate client organizations.
+- Associate tickets and requesters with organizations; keep organization identifiers on the relevant records.
+- Track technician availability, ticket workload, and ratings.
+- Maintain resource inventory and active allocations.
+- Use Banker's Algorithm to reject allocation requests that would produce an unsafe state, based on the technicians' declared maximum claims.
+- Organization-wise ticket counts, service category performance, resource availability, and scheduler metrics are available to administrators.
 
 ## Technology
 
-- Frontend: HTML5, CSS3, vanilla JavaScript
-- Backend: Python 3 + Flask
-- Database: MySQL (recommended for the DBMS demonstration) or SQLite (quick local demo mode)
-- OS scheduler: C++17
+- Python 3.10+
+- Flask 3.x
+- HTML5, CSS3, vanilla JavaScript
+- SQLite for the local demonstration
+- MySQL 8+ for the relational database demonstration
+- C++17 scheduling executables, with Python fallback implementations
 
-## 1. Run the quick local demo
+## Quick start — SQLite
 
-Python 3.10+ is recommended.
-
-### Windows (PowerShell)
+### Windows PowerShell
 
 ```powershell
-cd helpdesk_40_percent
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 Copy-Item .env.example .env
-python app.py
 ```
 
-Open `http://127.0.0.1:5000`. The default `DB_MODE=sqlite` makes the app usable immediately without MySQL credentials. SQLite data persists in `helpdesk_demo.db`; it is not a replacement for the intended MySQL DBMS demo.
+Edit `.env` before starting the app:
+
+```env
+DB_MODE=sqlite
+SECRET_KEY=replace-with-a-long-random-secret
+ADMIN_PASSWORD=set-a-strong-admin-password
+```
+
+Then run:
+
+```powershell
+python app.py
+```
 
 ### macOS / Linux
 
 ```bash
-cd helpdesk_40_percent
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+```
+
+Edit `.env` to set a unique `SECRET_KEY` and strong `ADMIN_PASSWORD`, then run:
+
+```bash
 python app.py
 ```
 
-## 2. Use MySQL for your DBMS demonstration
+Open `http://127.0.0.1:5000`. On the first run, tables are created/migrated and a `Campus Demo` organization, categories, and 22 sample tickets are seeded if the database has no tickets. SQLite data is stored in `helpdesk_demo.db` by default.
 
-1. Start MySQL Server from your local MySQL installation.
-2. Open MySQL Workbench and execute `schema.sql`. The script creates/uses `helpdesk_db` and defines the tables.
-3. Copy `.env.example` to `.env` (or set environment variables in your terminal), then set:
+## MySQL setup
+
+1. Start MySQL Server.
+2. Execute `schema.sql` in MySQL 8+ (it creates and selects `helpdesk_db`).
+3. Set these values in `.env`:
 
 ```env
 DB_MODE=mysql
@@ -64,88 +104,85 @@ MYSQL_PORT=3306
 MYSQL_USER=root
 MYSQL_PASSWORD=YOUR_MYSQL_PASSWORD
 MYSQL_DATABASE=helpdesk_db
+SECRET_KEY=replace-with-a-long-random-secret
+ADMIN_PASSWORD=set-a-strong-admin-password
 ```
 
-4. Restart the Flask app. `app.py` will verify/create the required tables and load demo tickets if the ticket table is empty.
+4. Run `python app.py`. The application checks the schema and runs an additive migration for an existing Phase 2 database. Existing ticket/user data is retained; rows without an organization are assigned to the default `Campus Demo` organization.
 
-The app reads `.env` automatically only if you add the following near the top of `app.py` after installing `python-dotenv`:
+Never commit `.env` or real database credentials. For a shared environment, use an application-specific MySQL account with only the permissions it needs instead of `root`.
 
-```python
-from dotenv import load_dotenv
-load_dotenv()
+## C++17 scheduler setup
+
+The app attempts to compile the relevant source file automatically when a scheduler is invoked. It detects `g++` or `clang++`, or uses `CXX` from `.env` when supplied.
+
+- Windows: install MinGW-w64 or another C++17 compiler and add it to `PATH`.
+- macOS: install Xcode Command Line Tools or an appropriate compiler.
+- Linux: install `g++` or `clang++` from the distribution package manager.
+
+The executables are generated under `build/`. When compilation or execution is unavailable, Python fallback logic is used and the dashboard identifies the engine that ran. To demonstrate the C++ implementation, verify the scheduler engine label in the latest run.
+
+## First-use workflow
+
+1. Open the public home page and submit a ticket under an active organization.
+2. Save the generated ticket ID. Track it using the requester email entered during submission.
+3. Open **Staff portal → Administrator login** and authenticate as the administrator using `ADMIN_PASSWORD` from `.env`.
+4. In the administrator workspace, add technicians with a temporary password, then assign tickets.
+5. Sign in through the technician workspace and update an assigned ticket to **In Progress**, **Waiting**, or **Resolved**. A resolution note can be added when resolving.
+6. Reopen the ticket tracking page using ticket ID and requester email. A resolved ticket offers service and optional technician rating forms.
+7. Open `/services` to view aggregate category ratings. Individual technician ratings remain in the administrator workspace.
+8. In the scheduler section, run FCFS, Priority + Aging, or Round Robin. For RR, choose a time quantum and optional context-switch overhead.
+9. Use the algorithm comparison table to compare the three policies over the same READY-ticket snapshot.
+10. Add resources and allocate them to technicians. The app evaluates the proposed allocation with Banker's Algorithm; release allocations when no longer needed.
+11. Register additional organizations to demonstrate organization-linked tickets and administrator reporting.
+
+## Default local administrator account
+
+- Administrator sign-in: `/admin/login`
+- Password: the value of `ADMIN_PASSWORD` in `.env`
+- The example file contains a placeholder password. Set a strong value before use.
+
+Technicians can open **Staff portal → Technician login**. Technician accounts are created by the administrator in the dashboard. Passwords are stored as password hashes. There is no default technician account.
+
+## Database tables
+
+The schema includes the original tables plus Phase 3 additions:
+
+- `users`, `categories`, `tickets`, `ticket_history`
+- `organizations`, `organization_users`
+- `technicians`, `ticket_assignments`
+- `technician_ratings`, `service_ratings`
+- `scheduling_runs`, `scheduling_results`, `scheduling_segments`
+- `resources`, `resource_claims`, `resource_allocations`
+- Reporting views: `v_technician_performance`, `v_service_category_performance`
+
+`resource_claims` stores each technician's declared maximum claim per resource for the Banker's safety check. `scheduling_segments` stores every RR execution interval because a ticket may run in multiple time slices.
+
+## Tests
+
+Run the scheduler tests from the project directory:
+
+```bash
+python -m unittest -v tests_scheduler.py tests_phase3.py tests_database_migration.py
 ```
 
-Place those two lines before importing `database`. Alternatively, export the variables in your shell before running `python app.py`. For a student demo, either method is fine. **Never submit or commit your real MySQL password.**
+The test suite covers the original FCFS/Priority + Aging behavior and the Round Robin scheduler's segments, metrics, arrival handling, context-switch overhead, invalid parameters, and empty input.
 
-## 3. Make sure the C++17 scheduler is used
+## Important behavior and limitations
 
-The app tries to compile `cpp/fcfs_scheduler.cpp` automatically using `g++` or `clang++` when the administrator runs FCFS.
-
-- Windows: install a working MinGW-w64 distribution (g++), add its `bin` folder to PATH, and restart VS Code/PowerShell.
-- Verify with `g++ --version` and `g++ -std=c++17 --version`.
-- macOS: install command-line tools or `g++`/`clang++`.
-- Linux: install the `g++` package using your distribution's package manager.
-
-The compiled binary is placed in `build/`. If compilation is unavailable, the same FCFS logic runs in a clearly-labelled Python fallback so the rest of the demo still works.
-
-## 4. Demo flow for the presentation
-
-1. Open **Home** and show that realistic sample tickets are already stored.
-2. Submit a fresh ticket using a name, email, issue title, category, location, and description.
-3. Note the generated ticket ID (for example `HD-0023`) and open its tracking page. A preliminary FCFS run is triggered after submission to provide an initial estimate.
-4. Open **Admin dashboard** and show Total Tickets, READY Queue, Open Work, and status counts.
-5. Click **Run FCFS simulation** to refresh the estimates and create a visible, saved scheduling run for the presentation.
-6. Explain the Gantt chart and metrics: arrival, service, start, completion, waiting, turnaround, response, throughput, and utilization.
-7. Return to Track Ticket. Its approximate ETA is available, while the ticket remains `READY` until an actual technician status workflow is added.
-8. Refresh/restart the Flask app and show persistence.
-
-## FCFS definitions
-
-For each ticket/job:
-
-- `Start = max(previous completion, arrival)`
-- `Completion = Start + Service Time`
-- `Waiting = Start - Arrival`
-- `Turnaround = Completion - Arrival`
-- `Response = First Start - Arrival` (same as waiting in this non-preemptive FCFS model)
-- `Throughput = completed jobs / elapsed simulation minutes`
-- `Utilization = total service time / elapsed simulation time × 100%`
-
-Arrival and service values are **simulation minutes**, independent of real timestamps. For this first phase, one simulated service lane is used. Multi-technician dispatch is planned for the next phase.
-
-## Database tables in the 40% phase
-
-- `users`
-- `categories`
-- `tickets`
-- `ticket_history`
-- `scheduling_runs`
-- `scheduling_results`
-
-See `schema.sql` for the MySQL schema. Use one shared database named `helpdesk_db` for the team.
-
-## Current limitations / later milestones
-
-- No production-grade authentication or role permissions yet; `/admin` is a demonstration dashboard. Keep this prototype local and do not expose it publicly.
-- FCFS is implemented now. Priority Scheduling with Aging and Round Robin are later milestones.
-- Technician management, assignment transactions, resource allocation, comments, and feedback are later milestones.
-- ETA is an approximate simulation projection and uses a single service lane in this phase.
-- The admin reset button deletes records in the local demo database and reseeds the sample scenario. Do not use it on real data.
+- Admin access is protected by a single shared password from `ADMIN_PASSWORD`; there is not yet a database-backed multi-admin account system.
+- Technicians have separate hashed-password accounts.
+- Customer access currently uses ticket ID plus requester-email matching. It is not a customer login or email OTP system and is not sufficient as the sole authentication mechanism for production multi-tenancy.
+- Organization selection on the public intake form is suitable for a controlled demonstration, not proof that the requester belongs to that organization. Production deployment should use organization-admin invitations or approved email domains and enforce membership on authenticated customer sessions.
+- `/services` intentionally presents aggregate service-category ratings across the service provider's tickets. It does not expose customer identities, ticket descriptions, individual technician ratings, or written private feedback.
+- The scheduling comparison is a simulation over the current READY queue and does not mutate ticket status.
+- Banker's Algorithm depends on accurate maximum claims entered by the administrator. It is a teaching/demo model, not automatic hardware procurement or device discovery.
+- The reset-demo action deletes ticket, history, scheduling, rating, assignment, and allocation records in the connected database and reseeds sample tickets. Use it only with disposable demo data.
 
 ## Troubleshooting
 
-- **Cannot connect to MySQL:** check that MySQL Server is running, the database exists, credentials are correct, and the port is `3306`.
-- **It says Python fallback:** install/configure `g++`, add it to PATH, restart the terminal, then run FCFS again.
-- **ModuleNotFoundError: flask/pymysql:** activate `.venv` and run `pip install -r requirements.txt`.
-- **Port 5000 already in use:** set `PORT=5001` in the environment and open `http://127.0.0.1:5001`.
-
-## Project status
-
-This is the requested first 40% prototype for the second-phase demonstration, not the final 100% application. It prioritizes a fully connected path: browser form → database → FCFS engine → persisted metrics/Gantt chart → ticket tracking.
-
-
-## Priority Scheduling with Aging
-
-The admin dashboard supports both FCFS and non-preemptive Priority + Aging. Priority levels use `1 = highest` and `4 = lowest`. Every 5 minutes a READY ticket waits, its effective priority improves by one level (the numeric value decreases), stopping at priority 1. At each dispatch point, the scheduler chooses the ready ticket with the best effective priority; ties go to the earlier arrival and then lower ticket ID. A running ticket is not preempted.
-
-The Gantt chart shows every scheduled ticket in one shared horizontal timeline. Short segments display their queue order; hover over a segment to view the ticket ID, title, and interval.
+- **`ModuleNotFoundError: flask`:** activate the virtual environment and run `pip install -r requirements.txt`.
+- **MySQL connection error:** verify that MySQL is running, `helpdesk_db` exists, and credentials/port are correct.
+- **Python fallback shown:** install a C++17 compiler and ensure `g++ --version` or `clang++ --version` works in the same terminal that starts Flask.
+- **Session/CSRF error:** reload the page and submit the form again. Use a stable `SECRET_KEY` in `.env` so sessions are not invalidated between restarts.
+- **Port conflict:** set `PORT=5001` in `.env` and open `http://127.0.0.1:5001`.

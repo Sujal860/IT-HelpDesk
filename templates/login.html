@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ login_type }} sign in | HelpDesk{% endblock %}
+{% block content %}
+<section class="login-shell">
+  <div class="login-card panel">
+    <div class="eyebrow">SECURE WORKSPACE</div>
+    <h1>{{ login_type }} sign in</h1>
+    <p>{% if login_type == 'Administrator' %}Use the administrator password configured for this installation.{% else %}Use the technician credentials issued by the administrator.{% endif %}</p>
+    <form method="post" action="{{ action }}" class="stack-form">
+      {% if login_type == 'Technician' %}<label>Email address<input type="email" name="email" autocomplete="username" required></label>{% endif %}
+      <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+      <button class="button button-primary" type="submit">Sign in <span>→</span></button>
+    </form>
+    {% if login_type == 'Administrator' %}<small class="muted">For local demo setup, set ADMIN_PASSWORD in your .env file before exposing the app to a network.</small><p class="login-switch">Technician? <a href="{{ url_for('technician_login') }}">Sign in to the technician workspace</a>.</p>{% else %}<p class="login-switch">Administrator? <a href="{{ url_for('admin_login') }}">Go to administrator sign in</a>.</p>{% endif %}
+  </div>
+</section>
+{% endblock %}
